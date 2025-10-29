@@ -2,91 +2,146 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>生徒モード - 単語テスト</title>
+<title>語彙力テスト（生徒用）</title>
 <style>
-body { font-family:sans-serif; margin:30px; background:#eef7ee; }
-.container { background:#fff; padding:20px; border-radius:10px; max-width:600px; margin:auto; }
-select, input, button { width:100%; margin:5px 0; padding:8px; }
-#result { margin-top:10px; font-weight:bold; }
-.wrong-list { margin-top:15px; background:#fff3e0; padding:10px; border-radius:6px; }
+body { font-family:sans-serif; text-align:center; background:#fffef5; margin:0; padding:20px; }
+h1 { color:#333; }
+.hidden { display:none; }
+input, button, select { padding:10px; margin:5px; font-size:1em; }
+#wrongWords li { list-style:none; margin:4px; }
 </style>
 </head>
 <body>
-<div class="container">
-<h1>✏️ 生徒モード</h1>
 
-<select id="unitSelect"></select>
-<button onclick="startQuiz()">テスト開始</button>
+<h1>語彙力テスト（生徒用）</h1>
 
-<div id="quizArea" style="display:none;">
-  <h2 id="quizWord"></h2>
-  <input id="answer" placeholder="英単語を入力してEnterキー" onkeydown="if(event.key==='Enter') checkAnswer()">
-  <button onclick="checkAnswer()">答える</button>
-  <p id="result"></p>
-  <div id="wrongArea" class="wrong-list" style="display:none;"></div>
+<div id="unitArea">
+  <select id="unitSelect"></select>
+  <button onclick="startQuiz()">テスト開始</button>
 </div>
+
+<div id="testArea" class="hidden">
+  <h3 id="quizWord"></h3>
+  <p id="remaining"></p>
+  <input type="text" id="answer" placeholder="英語を入力">
+  <p id="result"></p>
+  <button onclick="endQuiz()">終了</button>
+</div>
+
+<div id="wrongList" class="hidden">
+  <h3>間違えた単語一覧</h3>
+  <ul id="wrongWords"></ul>
+  <p id="score"></p>
+  <button onclick="restartQuiz()">もう一度テストする</button>
 </div>
 
 <script>
-let units={};
-let quizWords=[];
-let currentWord;
-let incorrect=[];
+// 単元データ
+const units = {
+  "果物": { "apple":"りんご", "banana":"バナナ", "orange":"オレンジ" },
+  "教科": { "math":"数学", "science":"理科", "english":"英語" }
+};
 
-function loadUnits(){
-  const data = localStorage.getItem("vocabUnits");
-  if(!data){ alert("単元が見つかりません（教師に確認してください）"); return; }
-  units = JSON.parse(data);
+let quizWords = [];
+let currentWord = null;
+let wrongAnswers = [];
+let currentUnit = null;
+let showAnswerNext = false;
+let totalQuestions = 0;
+
+function setupUnits(){
   const select = document.getElementById("unitSelect");
-  select.innerHTML = Object.keys(units)
-    .map(u=>`<option value="${u}">${u}</option>`).join("");
+  select.innerHTML="";
+  Object.keys(units).forEach(u=>{
+    const opt=document.createElement("option");
+    opt.value=u;
+    opt.textContent=u;
+    select.appendChild(opt);
+  });
 }
 
 function startQuiz(){
-  const name = document.getElementById("unitSelect").value;
-  quizWords = [...units[name]];
-  incorrect = [];
-  document.getElementById("quizArea").style.display="block";
-  document.getElementById("wrongArea").style.display="none";
+  const select = document.getElementById("unitSelect");
+  const unit = select.value;
+  if(!unit){ alert("単元を選んでください"); return; }
+  currentUnit = unit;
+  quizWords = Object.entries(units[unit]);
+  wrongAnswers = [];
+  totalQuestions = quizWords.length;
+  document.getElementById("unitArea").classList.add("hidden");
+  document.getElementById("testArea").classList.remove("hidden");
+  document.getElementById("wrongList").classList.add("hidden");
   nextQuestion();
 }
 
 function nextQuestion(){
-  document.getElementById("result").innerText="";
+  if(quizWords.length === 0){ showWrongList(); return; }
+  const idx = Math.floor(Math.random()*quizWords.length);
+  currentWord = quizWords.splice(idx,1)[0];
+  showAnswerNext = false;
+  document.getElementById("quizWord").innerText = currentWord[1];
   document.getElementById("answer").value="";
-  if(quizWords.length===0) return endQuiz();
-  currentWord = quizWords[Math.floor(Math.random()*quizWords.length)];
-  document.getElementById("quizWord").innerText=`「${currentWord.jp}」の英語は？`;
+  document.getElementById("answer").focus();
+  document.getElementById("result").innerText="";
+  document.getElementById("remaining").innerText = `残り ${quizWords.length + 1} 問`;
 }
+
+document.getElementById("answer").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){
+    if(!showAnswerNext){
+      // 答えをチェック
+      checkAnswer();
+      showAnswerNext = true;
+    } else {
+      // 次の問題へ
+      nextQuestion();
+    }
+  }
+});
 
 function checkAnswer(){
-  const ans = document.getElementById("answer").value.trim();
-  if(ans==="") return;
+  const userAnswer = document.getElementById("answer").value.trim();
+  const correctAnswer = currentWord[0];
   const result = document.getElementById("result");
-  if(ans.toLowerCase()===currentWord.en.toLowerCase()){
-    result.innerHTML="✅ 正解！";
-  }else{
-    result.innerHTML=`❌ 正解は「${currentWord.en}」`;
-    incorrect.push(currentWord);
-  }
-  quizWords = quizWords.filter(w=>w!==currentWord);
-  setTimeout(nextQuestion,800);
-}
-
-function endQuiz(){
-  const result = document.getElementById("result");
-  if(incorrect.length===0){
-    result.innerHTML="🎉 全問正解！おめでとうございます！";
-  }else{
-    result.innerHTML=`終了！間違えた単語は ${incorrect.length} 個`;
-    const wrongDiv = document.getElementById("wrongArea");
-    wrongDiv.style.display="block";
-    wrongDiv.innerHTML="<b>❌ 間違えた単語一覧：</b><br>"+
-      incorrect.map(w=>`${w.jp} → ${w.en}`).join("<br>");
+  if(userAnswer.toLowerCase() === correctAnswer.toLowerCase()){
+    result.innerText = "⭕ 正解！";
+  } else {
+    result.innerText = `❌ 不正解（正答：${correctAnswer}）`;
+    wrongAnswers.push({ word: currentWord[1], answer: correctAnswer });
   }
 }
 
-loadUnits();
+function endQuiz(){ showWrongList(); }
+
+function showWrongList(){
+  document.getElementById("testArea").classList.add("hidden");
+  document.getElementById("wrongList").classList.remove("hidden");
+
+  const list = document.getElementById("wrongWords");
+  list.innerHTML = "";
+  if(wrongAnswers.length === 0){
+    list.innerHTML = "<li>間違いはありません！</li>";
+  } else {
+    wrongAnswers.forEach(item=>{
+      const li = document.createElement("li");
+      li.textContent = `${item.word} → ${item.answer}`;
+      list.appendChild(li);
+    });
+  }
+
+  const score = document.getElementById("score");
+  const correctCount = totalQuestions - wrongAnswers.length;
+  const rate = ((correctCount / totalQuestions) * 100).toFixed(1);
+  score.innerText = `正答率：${correctCount} / ${totalQuestions} = ${rate}%`;
+}
+
+function restartQuiz(){
+  document.getElementById("wrongList").classList.add("hidden");
+  document.getElementById("unitArea").classList.remove("hidden");
+}
+
+setupUnits();
 </script>
+
 </body>
 </html>
